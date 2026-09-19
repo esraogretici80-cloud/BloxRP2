@@ -1,0 +1,46 @@
+{
+  "rules": {
+    ".read": "auth != null",
+    "users": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('admin').val() === true)",
+        "admin": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('admin').val() === true"
+        }
+      }
+    },
+    "chats": {
+      "$channel": {
+        ".read": "auth != null",
+        ".write": "auth != null && ($channel === 'Hepsi' || $channel === 'Asker' || $channel === 'Tetik' || ($channel === 'Yonetim' && root.child('users').child(auth.uid).child('admin').val() === true)) && root.child('system').child('banned_users').child(auth.uid).exists() === false",
+        "$messageId": {
+          ".validate": "newData.hasChildren(['uid','displayName','text','createdAt']) && newData.child('uid').val() === auth.uid && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 600"
+        }
+      }
+    },
+    "system": {
+      "rp_timer": {
+        ".read": "auth != null",
+        ".write": "auth != null && root.child('users').child(auth.uid).child('admin').val() === true"
+      },
+      "banned_users": {
+        ".read": "auth != null",
+        "$uid": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('admin').val() === true"
+        }
+      },
+      "founder_uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && (!data.exists() || data.val() === auth.uid)"
+      }
+    },
+    "presence": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.child('uid').val() === auth.uid"
+      }
+    }
+  }
+}

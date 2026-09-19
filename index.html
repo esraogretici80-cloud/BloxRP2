@@ -1,0 +1,259 @@
+
+<!-- Founder system: the first successful Google account automatically claims
+     system/founder_uid and receives Kurucu + admin privileges. -->
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#08080c">
+  <meta name="description" content="BloxRP Tactical Radio & RP Console">
+  <title>BloxRP - Tactical Radio & RP Console</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Firebase SDK - yerel dosyalar (WebIntoApp / WebView için CDN'e bağımlı değil) -->
+  <script src="vendor/firebase-app-compat.js"></script>
+  <script src="vendor/firebase-auth-compat.js"></script>
+  <script src="vendor/firebase-database-compat.js"></script>
+  <script src="app.js"></script>
+</head>
+<body>
+  <div id="bootScreen" class="boot-screen">
+    <div class="boot-card">
+      <div class="brand-mark">BR</div>
+      <h1>BloxRP</h1>
+      <p>Tactical Radio & RP Console</p>
+      <div class="boot-loader"><span></span></div>
+      <small id="bootStatus">Firebase bağlantısı hazırlanıyor...</small>
+      <div id="bootDebug" style="margin-top:14px;padding:10px;background:rgba(0,0,0,.45);border-radius:8px;font-size:10px;line-height:1.5;color:#9aa;text-align:left;max-width:320px;word-break:break-word;"></div>
+      <button id="bootForceLogin" type="button" style="margin-top:12px;width:100%;height:40px;border:1px solid #00f0ff;background:transparent;color:#00f0ff;border-radius:8px;font-weight:700;display:none;">Login ekranına geç</button>
+    </div>
+  </div>
+
+  <div id="loginModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-card auth-card">
+      <div class="auth-glow"></div>
+      <div class="brand-mark auth-mark">BR</div>
+      <div class="eyebrow">BLOXRP SECURE AUTH</div>
+      <h2>Google hesabınla bağlan</h2>
+      <p class="muted">Telsiz ağına katılmak için Google hesabını Firebase Authentication ile doğrula. Hesabın, tüm BloxRP kanallarında aynı kullanıcı kimliğiyle kullanılacak.</p>
+      <div class="auth-account">
+        <div class="auth-user-dot">G</div>
+        <div><strong id="loginAccountName">Google hesabınla giriş yap</strong><span id="loginAccountEmail">Aynı Firebase ağına güvenli şekilde bağlan.</span></div>
+      </div>
+      <button id="googleLoginBtn" class="google-btn" type="button"><span class="google-g">G</span> Google ile giriş yap</button>
+      <div id="loginError" class="alert danger hidden"></div>
+      <div class="auth-note">Google girişi Firebase Authentication üzerinden yapılır. Şifreni BloxRP görmez.</div>
+      <button class="btn btn-ghost full auth-demo" type="button" id="useDemoFromLogin">Demo moduna geç</button>
+    </div>
+  </div>
+
+  <div id="setupModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-card setup-card">
+      <button class="icon-btn modal-close" data-close="setupModal" aria-label="Kapat">×</button>
+      <div class="eyebrow">İLK KURULUM</div>
+      <h2>Firebase bağlantısını yapılandır</h2>
+      <p class="muted">Firebase Console → Project settings → Your apps bölümündeki Web App yapılandırmasını aşağıdaki alanlara gir. Bilgiler yalnızca bu tarayıcıda saklanır.</p>
+      <form id="firebaseSetupForm" class="form-grid">
+        <label>API Key<input name="apiKey" required autocomplete="off"></label>
+        <label>Auth Domain<input name="authDomain" required autocomplete="off"></label>
+        <label>Database URL<input name="databaseURL" required autocomplete="off" placeholder="https://...-default-rtdb..."></label>
+        <label>Project ID<input name="projectId" required autocomplete="off"></label>
+        <label>Storage Bucket<input name="storageBucket" autocomplete="off"></label>
+        <label>Messaging Sender ID<input name="messagingSenderId" required autocomplete="off"></label>
+        <label>App ID<input name="appId" required autocomplete="off"></label>
+        <label>Measurement ID<input name="measurementId" autocomplete="off"></label>
+        <div class="form-actions full">
+          <button class="btn btn-primary" type="submit">Bağlan ve Başlat</button>
+          <button class="btn btn-ghost" type="button" id="useDemoMode">Yerel Demo Modu</button>
+        </div>
+      </form>
+      <div id="setupError" class="alert danger hidden"></div>
+    </div>
+  </div>
+
+  <div id="toastHost" class="toast-host" aria-live="polite"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo">BR</div>
+      <div>
+        <strong>BLOX<span>RP</span></strong>
+        <small>TACTICAL RADIO</small>
+      </div>
+    </div>
+    <div class="top-actions">
+      <div class="connection-pill" id="connectionPill"><i></i><span>OFFLINE</span></div>
+      <button class="icon-btn" id="rankBtn" title="Rütbe arşivi">☷</button>
+      <button class="icon-btn" id="soundBtn" title="Ses">🔊</button>
+      <button class="avatar avatar-sm" id="profileBtn" title="Profil"><span id="headerInitials">--</span></button>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <section class="rp-bar panel">
+      <div class="rp-live"><span class="live-dot"></span><span id="rpState">RP BEKLEMEDE</span></div>
+      <div class="rp-event">
+        <span class="muted">AKTİF ETKİNLİK</span>
+        <strong id="rpEventName">Genel Devriye</strong>
+      </div>
+      <div class="timer" id="rpTimer">00:00:00</div>
+      <div class="announcement" id="announcementText">Telsiz ağı hazır.</div>
+    </section>
+
+    <section class="profile-panel panel">
+      <div class="profile-main">
+        <div class="avatar avatar-lg" id="profileAvatar"><span id="profileInitials">--</span></div>
+        <div class="profile-copy">
+          <div class="profile-name-row">
+            <h2 id="profileName">Telsiz Operatörü</h2>
+            <span class="role-badge" id="profileFaction">ASKER</span>
+          </div>
+          <div class="rank-line"><span id="profileRank">Er</span><span class="separator">•</span><span id="profileLevel">Seviye 1</span></div>
+          <div class="xp-wrap">
+            <div class="xp-meta"><span id="xpLabel">0 / 100 XP</span><span id="xpPercent">0%</span></div>
+            <div class="xp-track"><span id="xpFill"></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="profile-stats">
+        <div><b id="messageCount">0</b><small>MESAJ</small></div>
+        <div><b id="onlineCount">0</b><small>ONLINE</small></div>
+        <div><b id="uidShort">LOCAL</b><small>UID</small></div>
+      </div>
+    </section>
+
+    <nav class="channel-bar panel" aria-label="Telsiz kanalları">
+      <button class="channel active" data-channel="Hepsi"><span>◉</span> Hepsi</button>
+      <button class="channel" data-channel="Asker"><span>✦</span> Asker</button>
+      <button class="channel" data-channel="Tetik"><span>◆</span> Tetik</button>
+      <button class="channel" data-channel="Yonetim"><span>⚙</span> Yönetim</button>
+    </nav>
+
+    <section class="workspace">
+      <div class="chat-panel panel">
+        <div class="chat-head">
+          <div>
+            <div class="eyebrow">FREKANS</div>
+            <h3 id="channelTitle">Hepsi</h3>
+          </div>
+          <div class="chat-head-actions">
+            <span class="message-counter" id="channelCount">0</span>
+            <button class="icon-btn" id="clearLocalBtn" title="Yerel mesajları temizle">⌫</button>
+          </div>
+        </div>
+        <div class="chat-viewport" id="chatViewport" role="log" aria-live="polite"></div>
+        <div class="typing-line" id="typingLine"></div>
+        <form class="composer" id="messageForm" autocomplete="off">
+          <button class="quick-btn" type="button" id="beepBtn" title="Telsiz sesi">◉</button>
+          <input id="messageInput" maxlength="600" placeholder="Telsiz mesajını yaz..." aria-label="Mesaj">
+          <button class="send-btn" type="submit" aria-label="Gönder">➤</button>
+        </form>
+      </div>
+
+      <aside class="side-panel">
+        <div class="panel quick-card">
+          <div class="card-head"><span>OPERASYON</span><button class="mini-btn" id="refreshBtn">↻</button></div>
+          <div class="operation-grid">
+            <button class="op-tile" data-action="rank"><span>☷</span><b>Rütbeler</b><small>24 kademe</small></button>
+            <button class="op-tile" data-action="profile"><span>◎</span><b>Profil</b><small>Oyuncu kartı</small></button>
+            <button class="op-tile" data-action="sound"><span>♫</span><b>Ses</b><small>Radyo efektleri</small></button>
+            <button class="op-tile" data-action="setup"><span>⌘</span><b>Firebase</b><small>Bağlantı ayarları</small></button>
+          </div>
+        </div>
+        <div class="panel security-card">
+          <div class="card-head"><span>SİSTEM</span><span class="status-dot"></span></div>
+          <div class="system-row"><span>Realtime DB</span><b id="dbStatus">Bekliyor</b></div>
+          <div class="system-row"><span>RP Koruması</span><b id="banStatus">Aktif</b></div>
+          <div class="system-row"><span>Ses Synth</span><b id="soundStatus">Açık</b></div>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <aside id="adminDrawer" class="admin-drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <div><div class="eyebrow">STAFF TERMINAL</div><h2>Yönetim Konsolu</h2></div>
+      <button class="icon-btn" id="closeAdmin">×</button>
+    </div>
+    <div class="terminal-status"><span class="status-dot"></span><span id="adminAccessText">Yetki kontrol ediliyor...</span></div>
+
+    <div id="adminContent" class="admin-content">
+      <section class="admin-section">
+        <h3>RP Etkinliği</h3>
+        <div class="form-grid">
+          <label>Etkinlik adı<input id="adminEventName" value="Genel Devriye"></label>
+          <label>Süre (dakika)<input id="adminTimerMinutes" type="number" min="0" max="10080" value="60"></label>
+          <button class="btn btn-primary full" id="setTimerBtn">Global Timer'ı Güncelle</button>
+        </div>
+      </section>
+
+      <section class="admin-section">
+        <h3>Oyuncu Rütbesi</h3>
+        <div class="form-grid">
+          <label>UID / kullanıcı kimliği<input id="rankTargetUid"></label>
+          <label>Faksiyon
+            <select id="rankFaction">
+              <option value="Asker">Asker</option>
+              <option value="Tetik">Tetik</option>
+              <option value="Yonetim">Yönetim</option>
+            </select>
+          </label>
+          <label>Rütbe<select id="rankSelect"></select></label>
+          <button class="btn btn-primary full" id="assignRankBtn">Rütbe Ata</button>
+        </div>
+      </section>
+
+      <section class="admin-section">
+        <h3>RP Ban / Mute</h3>
+        <div class="form-grid">
+          <label>UID / kullanıcı kimliği<input id="banTargetUid"></label>
+          <label>Süre (dakika, 0 = kalıcı)<input id="banMinutes" type="number" min="0" max="525600" value="60"></label>
+          <label>Sebep<input id="banReason" maxlength="180"></label>
+          <div class="two-col">
+            <button class="btn btn-danger" id="banBtn">Banla / Mute</button>
+            <button class="btn btn-ghost" id="unbanBtn">Banı Kaldır</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="admin-section">
+        <h3>Yönetim Logu</h3>
+        <div class="admin-log" id="adminLog"></div>
+      </section>
+    </div>
+  </aside>
+
+  <div id="rankModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-card rank-card">
+      <button class="icon-btn modal-close" data-close="rankModal">×</button>
+      <div class="eyebrow">RÜTBE ARŞİVİ</div>
+      <h2>24 Kademe Hiyerarşisi</h2>
+      <div class="rank-tabs">
+        <button class="rank-tab active" data-rank-tab="Asker">Asker</button>
+        <button class="rank-tab" data-rank-tab="Tetik">Tetik</button>
+        <button class="rank-tab" data-rank-tab="Yonetim">Yönetim</button>
+      </div>
+      <div class="rank-list" id="rankList"></div>
+    </div>
+  </div>
+
+  <div id="profileModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-card">
+      <button class="icon-btn modal-close" data-close="profileModal">×</button>
+      <div class="profile-modal-hero">
+        <div class="avatar avatar-xl" id="modalAvatar"><span id="modalInitials">--</span></div>
+        <div><div class="eyebrow">OPERATÖR PROFİLİ</div><h2 id="modalName">Telsiz Operatörü</h2><p id="modalUid" class="mono"></p></div>
+      </div>
+      <div class="profile-detail-grid">
+        <div><span>Faksiyon</span><b id="modalFaction">Asker</b></div>
+        <div><span>Rütbe</span><b id="modalRank">Er</b></div>
+        <div><span>Seviye</span><b id="modalLevel">1</b></div>
+        <div><span>XP</span><b id="modalXP">0</b></div>
+        <div><span>Mesaj</span><b id="modalMessages">0</b></div>
+        <div><span>Durum</span><b id="modalBan">Temiz</b></div>
+      </div>
+      <div class="two-col profile-actions"><button class="btn btn-ghost" data-close="profileModal">Kapat</button><button class="btn btn-danger" id="googleLogoutBtn">Google hesabından çıkış</button></div>
+    </div>
+  </div>
+</body>
+</html>
